@@ -1,0 +1,34 @@
+# Github workflows for CraxCore Location Tracker
+name: CI
+
+on:
+    push:
+        branches: [main, dev]
+    pull_request:
+        branches: [main, dev]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Set up Python
+              uses: actions/setup-python@v2
+              with:
+                  python-version: '3.8'
+
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+            - name: Create env file
+              run: |
+                  echo "OPENCELLID_API_KEY=PLACEHOLDER_API_KEY_FOR_TESTING" > .env
+
+            - name: Run tests
+              run: |
+                  # Run basic tests to make sure the app initializes correctly
+                  python -c "import sys; import os; sys.path.append(os.getcwd()); import main"
+                  python init_api_keys.py

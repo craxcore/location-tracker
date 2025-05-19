@@ -1,0 +1,123 @@
+{
+    "version": "1.0",
+    "description": "Mock database of Bangladesh cell towers for simulation",
+    "towers": [
+        {
+            "mcc": 470,
+            "mnc": 1,
+            "lac": 42001,
+            "cid": 12345,
+            "lat": 23.8103,
+            "lon": 90.4125,
+            "area": "Dhaka, Gulshan"
+        },
+        {
+            "mcc": 470,
+            "mnc": 1,
+            "lac": 42002,
+            "cid": 12346,
+            "lat": 23.7937,
+            "lon": 90.4023,
+            "area": "Dhaka, Dhanmondi"
+        },
+        {
+            "mcc": 470,
+            "mnc": 1,
+            "lac": 42003,
+            "cid": 12347,
+            "lat": 23.7525,
+            "lon": 90.3654,
+            "area": "Dhaka, Mohammadpur"
+        },
+        {
+            "mcc": 470,
+            "mnc": 2,
+            "lac": 43001,
+            "cid": 23456,
+            "lat": 22.3569,
+            "lon": 91.7832,
+            "area": "Chittagong, Agrabad"
+        },
+        {
+            "mcc": 470,
+            "mnc": 2,
+            "lac": 43002,
+            "cid": 23457,
+            "lat": 22.3475,
+            "lon": 91.8144,
+            "area": "Chittagong, GEC Circle"
+        },
+        {
+            "mcc": 470,
+            "mnc": 3,
+            "lac": 44001,
+            "cid": 34567,
+            "lat": 24.8949,
+            "lon": 91.8687,
+            "area": "Sylhet, Zindabazar"
+        },
+        {
+            "mcc": 470,
+            "mnc": 3,
+            "lac": 44002,
+            "cid": 34568,
+            "lat": 24.9045,
+            "lon": 91.8523,
+            "area": "Sylhet, Uposhohor"
+        },
+        {
+            "mcc": 470,
+            "mnc": 1,
+            "lac": 45001,
+            "cid": 45678,
+            "lat": 24.3745,
+            "lon": 88.6042,
+            "area": "Rajshahi, Shaheb Bazar"
+        },
+        {
+            "mcc": 470,
+            "mnc": 2,
+            "lac": 46001,
+            "cid": 56789,
+            "lat": 22.8456,
+            "lon": 89.5403,
+            "area": "Khulna, Boyra"
+        },
+        {
+            "mcc": 470,
+            "mnc": 3,
+            "lac": 47001,
+            "cid": 67890,
+            "lat": 22.701,
+            "lon": 90.3535,
+            "area": "Barisal, Natullabad"
+        },
+        {
+            "mcc": 470,
+            "mnc": 1,
+            "lac": 48001,
+            "cid": 78901,
+            "lat": 25.7439,
+            "lon": 89.2752,
+            "area": "Rangpur, Modern More"
+        }
+    ],
+    "operators": {
+        "1": {
+            "name": "GrameenPhone",
+            "prefixes": ["017", "013"]
+        },
+        "2": {
+            "name": "Robi",
+            "prefixes": ["018", "016"]
+        },
+        "3": {
+            "name": "Banglalink",
+            "prefixes": ["019", "014"]
+        },
+        "4": {
+            "name": "Teletalk",
+            "prefixes": ["015", "011"]
+        }
+    }
+}

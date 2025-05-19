@@ -1,0 +1,674 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Secure Real-Time Mobile Number Location Tracker for Bangladesh
+--------------------------
+This tool simulates tracking Bangladeshi mobile numbers through cell tower information.
+For educational purposes only. Do not use for illegal activities.
+"""
+
+import os
+import sys
+import time
+import json
+import random
+import getpass
+import hashlib
+import datetime
+import requests
+import configparser
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+from rich.text import Text
+from geopy.geocoders import Nominatim
+from termcolor import colored
+
+# Import API key handler
+from api_key_handler import load_api_keys, update_config_with_api_keys
+# Import password manager for secure authentication
+try:
+    from password_manager import check_password, get_password_hint
+except ImportError:
+    # Fallback if password_manager is not found
+    def check_password(password):
+        return hashlib.sha256(password.encode()).hexdigest() == DEFAULT_PASSWORD_HASH
+    def get_password_hint():
+        return "Default password required. Contact administrator."
+
+console = Console()
+
+# ASCII Art Banner
+BANNER = """
+█▀▀ █▀█ ▄▀█ ▀▄▀   █▀▀ █▀█ █▀█ █▀▀
+█▄▄ █▀▄ █▀█ █░█   █▄▄ █▄█ █▀▄ ██▄
+
+🔒 SECURE LOCATION TRACKER v1.0 🔒
+"""
+
+# Password hash (default: "CraxCoreLocat")
+DEFAULT_PASSWORD_HASH = "eeed676313bd043bf65b7970d5641d94da9fe5c908f64a2b58851269d622c6c3"
+
+# Configuration
+CONFIG_FILE = "config.ini"
+LOG_FILE = "tracker_logs.dat"
+MAX_RETRY_ATTEMPTS = 3
+
+# Operator prefixes for Bangladesh
+BD_OPERATORS = {
+    "017": "GrameenPhone",
+    "013": "GrameenPhone",
+    "019": "Banglalink",
+    "014": "Banglalink",
+    "018": "Robi",
+    "016": "Robi",
+    "015": "Teletalk",
+    "011": "Teletalk",
+}
+
+class LocationTracker:
+    def __init__(self):
+        self.config = self.load_config()
+        self.authenticated = False
+        self.current_target = None
+        self.geolocator = Nominatim(user_agent="craxcore-location-tracker")
+        
+    def load_config(self):
+        """Load configuration from config file or create default if not exists"""
+        config = configparser.ConfigParser()
+        
+        if not os.path.exists(CONFIG_FILE):
+            # Create default config
+            config['API'] = {
+                'opencellid_key': 'your_opencellid_api_key_here',
+                'google_maps_key': 'your_google_maps_api_key_here',
+                'use_real_data': 'false'
+            }
+            
+            config['SECURITY'] = {
+                'password_hash': DEFAULT_PASSWORD_HASH,
+                'encrypt_logs': 'true',
+            }
+            
+            config['SETTINGS'] = {
+                'default_tracking_time': '30',
+                'save_history': 'true',
+            }
+            
+            with open(CONFIG_FILE, 'w') as f:
+                config.write(f)
+                
+        config.read(CONFIG_FILE)
+        return config
+    
+    def authenticate(self):
+        """Authenticate user with password"""
+        console.print(Panel.fit(BANNER, border_style="green"))
+        console.print("\n[bold yellow]🔐 Security Authentication Required[/bold yellow]")
+        
+        # Show password hint on first run
+        is_first_run = self.config['SECURITY']['password_hash'] == DEFAULT_PASSWORD_HASH
+        if is_first_run:
+            console.print(f"\n[bold cyan]ℹ️ First time login: {get_password_hint()}[/bold cyan]")
+        
+        for attempt in range(MAX_RETRY_ATTEMPTS):
+            password = getpass.getpass("Enter password: ")
+            
+            # Use the password manager to check password
+            is_valid = check_password(password)
+            
+            if is_valid:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[bold green]Authenticating...[/bold green]"),
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task("", total=100)
+                    while not progress.finished:
+                        progress.update(task, advance=0.9)
+                        time.sleep(0.02)
+                
+                console.print("\n[bold green]✅ Authentication successful![/bold green]")
+                self.authenticated = True
+                return True
+            else:
+                remaining = MAX_RETRY_ATTEMPTS - attempt - 1
+                console.print(f"[bold red]❌ Invalid password! {remaining} attempts remaining.[/bold red]")
+        
+        console.print("[bold red]Maximum authentication attempts reached. Exiting...[/bold red]")
+        sys.exit(1)
+    
+    def validate_bd_number(self, number):
+        """Validate Bangladeshi mobile number format"""
+        # Remove spaces and dashes
+        number = number.replace(" ", "").replace("-", "")
+        
+        # Standardize format to +880
+        if number.startswith("0"):
+            number = "+88" + number
+        elif number.startswith("88"):
+            number = "+" + number
+        
+        # Check if it's a valid BD number
+        if not number.startswith("+880") or len(number) != 14:
+            return None
+            
+        # Check if prefix is valid
+        prefix = number[4:7]
+        if prefix not in BD_OPERATORS:
+            return None
+            
+        return number
+    
+    def get_operator_info(self, number):
+        """Get operator information from the mobile number"""
+        prefix = number[4:7]
+        operator = BD_OPERATORS.get(prefix, "Unknown")
+        
+        # Random network status
+        volte_status = random.choice([True, False])
+        network_type = random.choice(["4G", "4G+", "5G", "3G"])
+        
+        return {
+            "operator": operator,
+            "volte": volte_status,
+            "network_type": network_type,
+            "msisdn": number
+        }
+    
+    def get_cell_tower_info(self):
+        """Simulate or get real cell tower information"""
+        # Check if we should use real data (requires root)
+        if self.config.getboolean('API', 'use_real_data'):
+            # In a real implementation, this would use AT commands
+            # to get data from a GSM modem or SIM
+            try:
+                # This would require a rooted device and appropriate permissions
+                console.print("[bold yellow]Attempting to access real GSM data (requires root)...[/bold yellow]")
+                # Sample implementation placeholder
+                # result = subprocess.check_output(['su', '-c', 'service call phone ...'])
+                
+                # For now, fallback to mock data
+                raise NotImplementedError("Real GSM data access not implemented")
+            except Exception as e:
+                console.print(f"[bold red]Failed to access real GSM data: {str(e)}[/bold red]")
+                console.print("[bold yellow]Falling back to simulation...[/bold yellow]")
+                return self._get_mock_cell_tower_info()
+        else:
+            return self._get_mock_cell_tower_info()
+    
+    def _get_mock_cell_tower_info(self):
+        """Get simulated cell tower information from mock database"""
+        try:
+            # Try to load from mock database
+            if os.path.exists("bd_cell_towers.json"):
+                with open("bd_cell_towers.json", "r") as f:
+                    towers_db = json.load(f)
+                    
+                # Get a random tower from the database
+                tower = random.choice(towers_db["towers"])
+                
+                # Extract cell tower info
+                return {
+                    "mcc": tower["mcc"],
+                    "mnc": tower["mnc"],
+                    "lac": tower["lac"],
+                    "cid": tower["cid"],
+                    "area": tower["area"],
+                    "lat": tower["lat"],
+                    "lon": tower["lon"]
+                }
+        except Exception as e:
+            # Fallback to random generation if database error
+            pass
+            
+        # Generate random values if database not available
+        mcc = 470  # Bangladesh MCC
+        mnc = random.choice([1, 2, 3])  # MNC codes for BD operators
+        
+        # Ranges for Dhaka area cell towers
+        lac = random.randint(40001, 49000)
+        cid = random.randint(10000, 99999)
+        
+        return {
+            "mcc": mcc,
+            "mnc": mnc,
+            "lac": lac,
+            "cid": cid
+        }
+    
+    def get_location_from_cell_info(self, cell_info):
+        """Get geographical location from cell tower information"""
+        # Check if cell_info already contains location data (from mock DB)
+        if "lat" in cell_info and "lon" in cell_info:
+            lat = cell_info["lat"]
+            lon = cell_info["lon"]
+            
+            # If we have area info from mock DB, use it
+            if "area" in cell_info:
+                address = f"{cell_info['area']}, Bangladesh"
+            else:
+                # Try to get address using reverse geocoding
+                try:
+                    location = self.geolocator.reverse(f"{lat}, {lon}", language="en")
+                    address = location.address if location else "Unknown location, Bangladesh"
+                except Exception:
+                    address = "Unknown location, Bangladesh"
+            
+            return {
+                "latitude": lat,
+                "longitude": lon,
+                "address": address,
+                "accuracy": random.randint(10, 100)
+            }
+            
+        # In a real implementation, this would use OpenCellID or similar API
+        # Try to use OpenCellID API if key is configured and not default
+        opencellid_key = self.config['API']['opencellid_key']
+        if opencellid_key and opencellid_key != "your_opencellid_api_key_here":
+            try:
+                # Build API request to OpenCellID
+                url = "https://opencellid.org/cell/get"
+                params = {
+                    "key": opencellid_key,
+                    "mcc": cell_info["mcc"],
+                    "mnc": cell_info["mnc"],
+                    "lac": cell_info["lac"],
+                    "cellid": cell_info["cid"],
+                    "format": "json"
+                }
+                
+                response = requests.get(url, params=params, timeout=10)
+                data = response.json()
+                
+                if "lat" in data and "lon" in data:
+                    # Get location from API response
+                    lat = float(data["lat"])
+                    lon = float(data["lon"])
+                    
+                    # Get address using reverse geocoding
+                    try:
+                        location = self.geolocator.reverse(f"{lat}, {lon}", language="en")
+                        address = location.address if location else "Unknown location, Bangladesh"
+                    except Exception:
+                        address = "Unknown location, Bangladesh"
+                    
+                    return {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "address": address,
+                        "accuracy": float(data.get("accuracy", 0))
+                    }
+            except Exception as e:
+                console.print(f"[bold yellow]API error: {str(e)}. Falling back to simulation.[/bold yellow]")
+        
+        # Fallback to simulation if API fails or not configured
+        # More precise simulation focusing on major cities
+        cities = [
+            {"name": "Dhaka", "lat": 23.8103, "lon": 90.4125},
+            {"name": "Chittagong", "lat": 22.3569, "lon": 91.7832},
+            {"name": "Sylhet", "lat": 24.8949, "lon": 91.8687},
+            {"name": "Rajshahi", "lat": 24.3745, "lon": 88.6042},
+            {"name": "Khulna", "lat": 22.8456, "lon": 89.5403},
+            {"name": "Barisal", "lat": 22.7010, "lon": 90.3535},
+            {"name": "Rangpur", "lat": 25.7439, "lon": 89.2752},
+        ]
+        
+        # Select city based on LAC range to make it more realistic
+        lac = cell_info["lac"]
+        city_index = ((lac % 1000) % len(cities))
+        selected_city = cities[city_index]
+        
+        # Add some randomness around the city center
+        lat = selected_city["lat"] + random.uniform(-0.05, 0.05)
+        lon = selected_city["lon"] + random.uniform(-0.05, 0.05)
+        
+        # Get address from coordinates using reverse geocoding
+        try:
+            location = self.geolocator.reverse(f"{lat}, {lon}", language="en")
+            address = location.address if location else f"Near {selected_city['name']}, Bangladesh"
+        except Exception:
+            address = f"Near {selected_city['name']}, Bangladesh"
+        
+        return {
+            "latitude": lat,
+            "longitude": lon,
+            "address": address,
+            "accuracy": random.randint(10, 100)
+        }
+    
+    def track_mobile(self, mobile_number):
+        """Main tracking function"""
+        if not self.authenticated:
+            console.print("[bold red]Error: Authentication required![/bold red]")
+            return False
+        
+        # Validate number
+        validated_number = self.validate_bd_number(mobile_number)
+        if not validated_number:
+            console.print("[bold red]Error: Invalid Bangladeshi mobile number![/bold red]")
+            return False
+        
+        self.current_target = validated_number
+        
+        # Get operator information
+        operator_info = self.get_operator_info(validated_number)
+        
+        # Display tracking started
+        console.print(f"\n[bold]🔍 Tracking Mobile: [/bold][bold green]{validated_number}[/bold green]")
+        console.print(f"[bold]📱 Operator: [/bold][bold blue]{operator_info['operator']} ({operator_info['network_type']})[/bold blue]")
+        
+        # Simulate tracking process
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold green]Connecting to mobile network...[/bold green]"),
+            transient=True,
+        ) as progress:
+            task = progress.add_task("", total=100)
+            for i in range(101):
+                progress.update(task, completed=i)
+                time.sleep(0.05)
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold green]Retrieving BTS information...[/bold green]"),
+            transient=True,
+        ) as progress:
+            task = progress.add_task("", total=100)
+            for i in range(101):
+                progress.update(task, completed=i)
+                time.sleep(0.05)
+        
+        # Get cell tower info
+        cell_info = self.get_cell_tower_info()
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold green]Triangulating location...[/bold green]"),
+            transient=True,
+        ) as progress:
+            task = progress.add_task("", total=100)
+            for i in range(101):
+                progress.update(task, completed=i)
+                time.sleep(0.05)
+                
+        # Get location data
+        location_data = self.get_location_from_cell_info(cell_info)
+        
+        # Save tracking data if enabled
+        if self.config.getboolean('SETTINGS', 'save_history'):
+            self.save_tracking_data(validated_number, operator_info, cell_info, location_data)
+        
+        # Display results
+        self.display_tracking_results(validated_number, operator_info, cell_info, location_data)
+        
+        return True
+    
+    def save_tracking_data(self, number, operator_info, cell_info, location_data):
+        """Save tracking data to log file (encrypted if configured)"""
+        timestamp = datetime.datetime.now().isoformat()
+        
+        data = {
+            "timestamp": timestamp,
+            "target": number,
+            "operator": operator_info,
+            "cell_info": cell_info,
+            "location": location_data
+        }
+        
+        # Simple encryption by encoding and XOR with key (in real app, use proper encryption)
+        if self.config.getboolean('SECURITY', 'encrypt_logs'):
+            encoded_data = json.dumps(data).encode()
+            key = hashlib.sha256(b"craxcore-secure-key").digest()
+            encrypted = bytes([encoded_data[i] ^ key[i % len(key)] for i in range(len(encoded_data))])
+            
+            # Append to log file
+            with open(LOG_FILE, 'ab') as f:
+                f.write(encrypted + b'\n')
+        else:
+            # Save as plain JSON
+            with open(LOG_FILE, 'a') as f:
+                f.write(json.dumps(data) + '\n')
+    
+    def display_tracking_results(self, number, operator_info, cell_info, location_data):
+        """Display tracking results in a formatted table"""
+        console.print("\n[bold green]✅ Target Located Successfully![/bold green]\n")
+        
+        # Create results table
+        table = Table(title=f"📱 Location Data for {number}", show_header=True, header_style="bold magenta")
+        
+        table.add_column("Parameter", style="dim")
+        table.add_column("Value", style="green")
+        
+        # Current time
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        table.add_row("Timestamp", current_time)
+        
+        # MSISDN
+        table.add_row("MSISDN", number)
+        
+        # Operator info
+        table.add_row("Operator", operator_info['operator'])
+        table.add_row("Network", f"{operator_info['network_type']} (VoLTE: {'Yes' if operator_info['volte'] else 'No'})")
+        
+        # BTS info
+        table.add_row("MCC", str(cell_info['mcc']))
+        table.add_row("MNC", str(cell_info['mnc']))
+        table.add_row("LAC", str(cell_info['lac']))
+        table.add_row("CID", str(cell_info['cid']))
+        
+        # Location
+        table.add_row("Latitude", f"{location_data['latitude']:.6f}")
+        table.add_row("Longitude", f"{location_data['longitude']:.6f}")
+        table.add_row("Accuracy", f"{location_data['accuracy']} meters")
+        
+        # Address
+        table.add_row("Address", location_data['address'])
+        
+        # Last seen
+        table.add_row("Last Seen", "Online Now")
+        
+        console.print(table)
+        
+        # Display map link
+        map_url = f"https://maps.google.com/maps?q={location_data['latitude']},{location_data['longitude']}&z=15"
+        console.print(f"\n[bold blue]🗺️ View on Map: [link={map_url}]{map_url}[/link][/bold blue]")
+
+def view_tracking_history(tracker):
+    """View the history of tracked mobile numbers"""
+    if not os.path.exists(LOG_FILE):
+        console.print("[bold yellow]No tracking history found![/bold yellow]")
+        return
+    
+    # Ask for password to decrypt logs
+    password = getpass.getpass("Enter password to decrypt logs: ")
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    if password_hash != tracker.config['SECURITY']['password_hash']:
+        console.print("[bold red]Invalid password![/bold red]")
+        return
+    
+    try:
+        console.print("[bold]Decrypting tracking logs...[/bold]")
+        
+        # Read the encrypted logs
+        tracking_logs = []
+        with open(LOG_FILE, 'rb') as f:
+            for line in f:
+                if line.strip():
+                    if tracker.config.getboolean('SECURITY', 'encrypt_logs'):
+                        # Decrypt the log entry
+                        key = hashlib.sha256(b"craxcore-secure-key").digest()
+                        decrypted = bytes([line[i] ^ key[i % len(key)] for i in range(len(line))])
+                        data = json.loads(decrypted.decode('utf-8', errors='ignore'))
+                    else:
+                        # Plain JSON
+                        data = json.loads(line.decode('utf-8', errors='ignore'))
+                    
+                    tracking_logs.append(data)
+        
+        if not tracking_logs:
+            console.print("[bold yellow]No tracking records found![/bold yellow]")
+            return
+        
+        # Display tracking logs in a table
+        table = Table(title="📱 Tracking History", show_header=True, header_style="bold magenta")
+        
+        table.add_column("Timestamp", style="dim")
+        table.add_column("Target", style="green")
+        table.add_column("Operator", style="blue")
+        table.add_column("Location", style="yellow")
+        
+        for log in tracking_logs:
+            timestamp = datetime.datetime.fromisoformat(log['timestamp']).strftime("%Y-%m-%d %H:%M:%S")
+            target = log['target']
+            operator = log['operator']['operator']
+            location = f"{log['location']['address'][:30]}..." if len(log['location']['address']) > 30 else log['location']['address']
+            
+            table.add_row(timestamp, target, operator, location)
+        
+        console.print(table)
+        
+    except Exception as e:
+        console.print(f"[bold red]Error reading logs: {str(e)}[/bold red]")
+
+def change_password(tracker):
+    """Change the password for the tracker"""
+    console.print("[bold yellow]Change Password[/bold yellow]")
+    
+    # Import set_password function at runtime to avoid circular imports
+    try:
+        from password_manager import set_password, check_password
+    except ImportError:
+        console.print("[bold red]Error: Password manager module not found![/bold red]")
+        return
+    
+    # Verify current password
+    current_password = getpass.getpass("Enter current password: ")
+    
+    if not check_password(current_password):
+        console.print("[bold red]Invalid current password![/bold red]")
+        return
+    
+    # Get new password
+    new_password = getpass.getpass("Enter new password: ")
+    confirm_password = getpass.getpass("Confirm new password: ")
+    
+    if new_password != confirm_password:
+        console.print("[bold red]Passwords do not match![/bold red]")
+        return
+    
+    if len(new_password) < 6:
+        console.print("[bold red]Password must be at least 6 characters long![/bold red]")
+        return
+    
+    # Update password using password manager
+    if set_password(new_password):
+        # Reload config
+        tracker.config.read(CONFIG_FILE)
+        console.print("[bold green]Password changed successfully![/bold green]")
+    else:
+        console.print("[bold red]Failed to change password![/bold red]")
+
+def clear_tracking_history():
+    """Clear all tracking history"""
+    if not os.path.exists(LOG_FILE):
+        console.print("[bold yellow]No tracking history found![/bold yellow]")
+        return
+    
+    confirm = input("Are you sure you want to clear all tracking history? (y/n): ")
+    if confirm.lower() == 'y':
+        try:
+            os.remove(LOG_FILE)
+            console.print("[bold green]Tracking history cleared successfully![/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]Error clearing history: {str(e)}[/bold red]")
+    else:
+        console.print("[bold yellow]Operation cancelled.[/bold yellow]")
+
+def display_about():
+    """Display information about the tracker"""
+    console.print(Panel.fit(
+        "\n[bold]CraxCore Location Tracker v1.0[/bold]\n\n"
+        "A secure Python-based CLI tool for tracking real-time locations of Bangladeshi mobile numbers.\n\n"
+        "[bold]Features:[/bold]\n"
+        "• Password protection for secure access\n"
+        "• Support for all Bangladeshi mobile operators\n"
+        "• BTS tower info simulation for location tracking\n"
+        "• Encrypted tracking history\n\n"
+        "[bold]Created by:[/bold] CraxCore Team\n"
+        "[bold]Created on:[/bold] May 17, 2025\n\n"
+        "[bold red]DISCLAIMER:[/bold red] This tool is for [bold]EDUCATIONAL PURPOSES ONLY[/bold].\n"
+        "Using this tool to track individuals without consent may be illegal in your jurisdiction.\n",
+        title="About", border_style="green"
+    ))
+
+def main():
+    # Clear terminal
+    os.system('clear')
+    
+    # Initialize tracker
+    tracker = LocationTracker()
+    
+    # Authenticate user
+    tracker.authenticate()
+    
+    while True:
+        os.system('clear')
+        console.print(Panel.fit(BANNER, border_style="green"))
+        console.print("\n[bold yellow]===== 📱 Mobile Number Tracker =====\n[/bold yellow]")
+        console.print("[1] Track Mobile Number")
+        console.print("[2] View Tracking History")
+        console.print("[3] View Location Map")
+        console.print("[4] Export Tracking Data")
+        console.print("[5] Collect Tower Data")
+        console.print("[6] Import Towers from GeoJSON")
+        console.print("[7] Change Password")
+        console.print("[8] Clear Tracking History")
+        console.print("[9] System Capability Check")
+        console.print("[0] About/Exit")
+        
+        choice = input("\nEnter your choice (0-9): ")
+        
+        if choice == "1":
+            mobile_number = input("\nEnter mobile number to track (e.g. +8801712345678): ")
+            tracker.track_mobile(mobile_number)
+            input("\nPress Enter to continue...")
+        elif choice == "2":
+            view_tracking_history(tracker)
+            input("\nPress Enter to continue...")
+        elif choice == "3":
+            os.system('python map_view.py')
+            input("\nPress Enter to continue...")
+        elif choice == "4":
+            os.system('python export_utils.py')
+            input("\nPress Enter to continue...")
+        elif choice == "5":
+            os.system('python collect_towers.py')
+            input("\nPress Enter to continue...")
+        elif choice == "6":
+            os.system('python convert_geojson.py')
+            input("\nPress Enter to continue...")
+        elif choice == "7":
+            change_password(tracker)
+            input("\nPress Enter to continue...")
+        elif choice == "8":
+            clear_tracking_history()
+            input("\nPress Enter to continue...")
+        elif choice == "9":
+            os.system('python check_system.py')
+            input("\nPress Enter to continue...")
+        elif choice == "0":
+            display_about()
+            exit_choice = input("\nExit the application? (y/n): ")
+            if exit_choice.lower() == 'y':
+                console.print("\n[bold green]Thank you for using CraxCore Location Tracker![/bold green]")
+                sys.exit(0)
+        else:
+            console.print("[bold red]Invalid choice. Please try again.[/bold red]")
+            input("\nPress Enter to continue...")
+
+if __name__ == "__main__":
+    main()
