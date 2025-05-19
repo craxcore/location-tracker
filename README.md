@@ -184,3 +184,12 @@ You can export tracking data in multiple formats:
 ## 👨‍💻 Author
 
 CraxCore Team
+
+## 📞 Connect With Us
+
+-   GitHub: [https://github.com/craxcore/location-tracker](https://github.com/craxcore/location-tracker)
+-   Telegram: [https://t.me/craxcore](https://t.me/craxcore)
+-   Facebook: [https://facebook.com/craxcore](https://facebook.com/craxcore)
+-   YouTube: [https://youtube.com/@craxcore](https://youtube.com/@craxcore)
+-   TikTok: [https://tiktok.com/@craxcore](https://tiktok.com/@craxcore)
+-   Email: contact@craxcore.com

@@ -10,6 +10,13 @@ setup(
     author="CraxCore Team",
     author_email="contact@craxcore.com",
     url="https://github.com/craxcore/location-tracker",
+    project_urls={
+        "GitHub": "https://github.com/craxcore/location-tracker",
+        "Telegram": "https://t.me/craxcore",
+        "Facebook": "https://facebook.com/craxcore",
+        "YouTube": "https://youtube.com/@craxcore",
+        "TikTok": "https://tiktok.com/@craxcore",
+    },
     packages=find_packages(),
     install_requires=[
         "requests>=2.27.1",

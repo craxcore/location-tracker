@@ -40,3 +40,11 @@ echo
 echo "⚠️ DISCLAIMER: This tool is for EDUCATIONAL PURPOSES ONLY."
 echo "   Using this tool to track individuals without consent may be illegal."
 echo
+echo "📱 Connect with CraxCore:"
+echo "   GitHub: https://github.com/craxcore/location-tracker"
+echo "   Telegram: https://t.me/craxcore"
+echo "   Facebook: https://facebook.com/craxcore"
+echo "   YouTube: https://youtube.com/@craxcore"
+echo "   TikTok: https://tiktok.com/@craxcore"
+echo "   Email: contact@craxcore.com"
+echo

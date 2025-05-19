@@ -25,6 +25,17 @@ def print_banner():
     print("===============================")
     print()
 
+def print_branding():
+    """Print CraxCore branding information"""
+    print("\nConnect with CraxCore:")
+    print("  GitHub: https://github.com/craxcore/location-tracker")
+    print("  Telegram: https://t.me/craxcore")
+    print("  Facebook: https://facebook.com/craxcore")
+    print("  YouTube: https://youtube.com/@craxcore")
+    print("  TikTok: https://tiktok.com/@craxcore")
+    print("  Email: contact@craxcore.com")
+    print()
+
 def check_requirements():
     """Check if all required packages are installed"""
     try:
@@ -82,6 +93,7 @@ def main():
         input("\nPress Enter to continue without API keys or Ctrl+C to exit...")
     
     print("[*] Launching CraxCore Location Tracker...")
+    print_branding()
     time.sleep(1)
     
     try:

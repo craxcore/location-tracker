@@ -5,6 +5,17 @@
 Initialize API Keys Script for CraxCore Location Tracker
 -------------------------------------------------------
 This script initializes API keys and updates the config file
+
+Created by: CraxCore Team
+Website: https://github.com/craxcore/location-tracker
+Contact: contact@craxcore.com
+Social:
+  - Telegram: https://t.me/craxcore
+  - Facebook: https://facebook.com/craxcore
+  - YouTube: https://youtube.com/@craxcore
+  - TikTok: https://tiktok.com/@craxcore
+
+Last Updated: May 19, 2025
 """
 
 import os

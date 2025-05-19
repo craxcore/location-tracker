@@ -34,6 +34,17 @@ fi
 echo "[*] Setting up security features..."
 python setup_security.py
 
+# Show branding information
+echo
+echo "📱 Connect with CraxCore:"
+echo "   GitHub: https://github.com/craxcore/location-tracker"
+echo "   Telegram: https://t.me/craxcore"
+echo "   Facebook: https://facebook.com/craxcore"
+echo "   YouTube: https://youtube.com/@craxcore"
+echo "   TikTok: https://tiktok.com/@craxcore"
+echo "   Email: contact@craxcore.com"
+echo
+
 # Launch the main application
 python main.py
 
