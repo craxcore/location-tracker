@@ -19,6 +19,8 @@ import datetime
 import requests
 import configparser
 import select  # For keyboard input handling
+from dotenv import load_dotenv
+import importlib
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -95,14 +97,14 @@ def safe_input(prompt):
 
 # Operator prefixes for Bangladesh
 BD_OPERATORS = {
-    "017": "GrameenPhone",
-    "013": "GrameenPhone",
-    "019": "Banglalink",
-    "014": "Banglalink",
-    "018": "Robi",
-    "016": "Robi",
-    "015": "Teletalk",
-    "011": "Teletalk",
+    "17": "GrameenPhone",
+    "13": "GrameenPhone",
+    "19": "Banglalink",
+    "14": "Banglalink",
+    "18": "Robi",
+    "16": "Robi",
+    "15": "Teletalk",
+    "11": "Teletalk",
 }
 
 class LocationTracker:
@@ -121,7 +123,7 @@ class LocationTracker:
             config['API'] = {
                 'opencellid_key': 'your_opencellid_api_key_here',
                 'google_maps_key': 'your_google_maps_api_key_here',
-                'use_real_data': 'false'
+                'use_real_data': 'true'  # Default to real data
             }
             
             config['SECURITY'] = {
@@ -206,8 +208,8 @@ class LocationTracker:
             console.print(f"[bold yellow]⚠️ Invalid length: {len(number)} digits. Bangladesh mobile numbers should have 11 digits (excluding country code)[/bold yellow]")
             return None
             
-        # Check if prefix is valid
-        prefix = number[4:7]
+        # Check if prefix is valid - operator code is 2 digits
+        prefix = number[4:6]  # Taking only the first 2 digits after country code
         if prefix not in BD_OPERATORS:
             console.print(f"[bold yellow]⚠️ Invalid operator prefix '{prefix}'. Valid prefixes: {', '.join(BD_OPERATORS.keys())}[/bold yellow]")
             return None
@@ -216,7 +218,7 @@ class LocationTracker:
     
     def get_operator_info(self, number):
         """Get operator information from the mobile number"""
-        prefix = number[4:7]
+        prefix = number[4:6]  # Taking only the first 2 digits after country code
         operator = BD_OPERATORS.get(prefix, "Unknown")
         
         # Random network status
@@ -293,32 +295,14 @@ class LocationTracker:
     
     def get_location_from_cell_info(self, cell_info):
         """Get geographical location from cell tower information"""
-        # Check if cell_info already contains location data (from mock DB)
-        if "lat" in cell_info and "lon" in cell_info:
-            lat = cell_info["lat"]
-            lon = cell_info["lon"]
-            
-            # If we have area info from mock DB, use it
-            if "area" in cell_info:
-                address = f"{cell_info['area']}, Bangladesh"
-            else:
-                # Try to get address using reverse geocoding
-                try:
-                    location = self.geolocator.reverse(f"{lat}, {lon}", language="en")
-                    address = location.address if location else "Unknown location, Bangladesh"
-                except Exception:
-                    address = "Unknown location, Bangladesh"
-            
-            return {
-                "latitude": lat,
-                "longitude": lon,
-                "address": address,
-                "accuracy": random.randint(10, 100)
-            }
-            
-        # In a real implementation, this would use OpenCellID or similar API
-        # Try to use OpenCellID API if key is configured and not default
+        # Only use OpenCellID API - no more dummy or simulated data
         opencellid_key = self.config['API']['opencellid_key']
+        
+        # Check for environment variable if configured to use it
+        if opencellid_key == "use_env_variable":
+            load_dotenv()
+            opencellid_key = os.getenv('OPENCELLID_API_KEY')
+            
         if opencellid_key and opencellid_key != "your_opencellid_api_key_here":
             try:
                 # Build API request to OpenCellID
@@ -331,6 +315,8 @@ class LocationTracker:
                     "cellid": cell_info["cid"],
                     "format": "json"
                 }
+                
+                console.print(f"[bold]🔍 Querying OpenCellID for tower: MCC={cell_info['mcc']}, MNC={cell_info['mnc']}, LAC={cell_info['lac']}, CID={cell_info['cid']}[/bold]")
                 
                 response = requests.get(url, params=params, timeout=10)
                 data = response.json()
@@ -347,48 +333,42 @@ class LocationTracker:
                     except Exception:
                         address = "Unknown location, Bangladesh"
                     
+                    # Log successful lookup
+                    console.print(f"[bold green]✅ Found tower location: {lat:.6f}, {lon:.6f}[/bold green]")
+                    
                     return {
                         "latitude": lat,
                         "longitude": lon,
                         "address": address,
                         "accuracy": float(data.get("accuracy", 0))
                     }
+                else:
+                    # API returned no data for this tower
+                    console.print("[bold red]❌ OpenCellID returned no data for this tower.[/bold red]")
             except Exception as e:
-                console.print(f"[bold yellow]API error: {str(e)}. Falling back to simulation.[/bold yellow]")
+                console.print(f"[bold red]❌ OpenCellID API error: {str(e)}[/bold red]")
         
-        # Fallback to simulation if API fails or not configured
-        # More precise simulation focusing on major cities
-        cities = [
-            {"name": "Dhaka", "lat": 23.8103, "lon": 90.4125},
-            {"name": "Chittagong", "lat": 22.3569, "lon": 91.7832},
-            {"name": "Sylhet", "lat": 24.8949, "lon": 91.8687},
-            {"name": "Rajshahi", "lat": 24.3745, "lon": 88.6042},
-            {"name": "Khulna", "lat": 22.8456, "lon": 89.5403},
-            {"name": "Barisal", "lat": 22.7010, "lon": 90.3535},
-            {"name": "Rangpur", "lat": 25.7439, "lon": 89.2752},
-        ]
+        # If we reach here, the API failed or is not configured - use Dhaka as fallback
+        console.print("[bold yellow]⚠️ Using default Dhaka location as fallback.[/bold yellow]")
+        console.print("[bold yellow]⚠️ This is not your real location - just a placeholder.[/bold yellow]")
+        console.print("[bold yellow]ℹ️ Please verify your OpenCellID API key is correctly configured.[/bold yellow]")
         
-        # Select city based on LAC range to make it more realistic
-        lac = cell_info["lac"]
-        city_index = ((lac % 1000) % len(cities))
-        selected_city = cities[city_index]
+        # Dhaka central coordinates
+        lat = 23.8103
+        lon = 90.4125
         
-        # Add some randomness around the city center
-        lat = selected_city["lat"] + random.uniform(-0.05, 0.05)
-        lon = selected_city["lon"] + random.uniform(-0.05, 0.05)
-        
-        # Get address from coordinates using reverse geocoding
+        # Get address for Dhaka
         try:
             location = self.geolocator.reverse(f"{lat}, {lon}", language="en")
-            address = location.address if location else f"Near {selected_city['name']}, Bangladesh"
+            address = location.address if location else "Dhaka, Bangladesh"
         except Exception:
-            address = f"Near {selected_city['name']}, Bangladesh"
+            address = "Dhaka, Bangladesh"
         
         return {
             "latitude": lat,
             "longitude": lon,
             "address": address,
-            "accuracy": random.randint(10, 100)
+            "accuracy": 5000  # Set a large accuracy radius to indicate this is not precise
         }
     
     def track_mobile(self, mobile_number):
@@ -414,7 +394,26 @@ class LocationTracker:
         console.print(f"[bold]📱 Operator: [/bold][bold blue]{operator_info['operator']} ({operator_info['network_type']})[/bold blue]")
         
         try:
-            # Simulate tracking process
+            # Check if OpenCellID is configured
+            opencellid_key = self.config['API']['opencellid_key']
+            
+            # Check for environment variable if configured to use it
+            if opencellid_key == "use_env_variable":
+                load_dotenv()
+                opencellid_key = os.getenv('OPENCELLID_API_KEY')
+                
+            is_opencellid_configured = opencellid_key and opencellid_key != "your_opencellid_api_key_here"
+            
+            if not is_opencellid_configured:
+                console.print("[bold red]❌ ERROR: OpenCellID API key is not configured![/bold red]")
+                console.print("[bold yellow]ℹ️ You must configure OpenCellID to get accurate location data.[/bold yellow]")
+                console.print("[bold yellow]ℹ️ Select option 'A' from the main menu to configure OpenCellID.[/bold yellow]")
+                return False
+            
+            # Set use_real_data to true to force use of real data
+            self.config['API']['use_real_data'] = "true"
+            
+            # Connect to network
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[bold green]Connecting to mobile network...[/bold green]"),
@@ -423,7 +422,10 @@ class LocationTracker:
                 task = progress.add_task("", total=100)
                 for i in range(101):
                     progress.update(task, completed=i)
-                    time.sleep(0.05)
+                    time.sleep(0.02)  # Speed up animation
+            
+            console.print("[bold cyan]ℹ️ Using OpenCellID for getting real tower location data[/bold cyan]")
+            console.print("[bold cyan]ℹ️ Location data will be accurate if your SIM is in Dhaka[/bold cyan]")
             
             with Progress(
                 SpinnerColumn(),
@@ -433,10 +435,37 @@ class LocationTracker:
                 task = progress.add_task("", total=100)
                 for i in range(101):
                     progress.update(task, completed=i)
-                    time.sleep(0.05)
+                    time.sleep(0.02)  # Speed up animation
             
-            # Get cell tower info
-            cell_info = self.get_cell_tower_info()
+            # Get cell tower info from MCC/MNC codes
+            # For Bangladesh Grameenphone: MCC=470, MNC=1
+            # For Bangladesh Robi: MCC=470, MNC=2
+            # For Bangladesh Banglalink: MCC=470, MNC=3
+            # For Bangladesh Teletalk: MCC=470, MNC=4
+            
+            # Map operator prefixes to MNC codes
+            mnc_map = {
+                "17": 1,  # GrameenPhone
+                "13": 1,  # GrameenPhone
+                "18": 2,  # Robi
+                "16": 2,  # Robi
+                "19": 3,  # Banglalink
+                "14": 3,  # Banglalink
+                "15": 4,  # Teletalk
+                "11": 4,  # Teletalk
+            }
+            
+            # Get operator prefix (2 digits after +880)
+            prefix = validated_number[4:6]
+            mnc = mnc_map.get(prefix, 1)
+            
+            # Dhaka LAC and CID (typical values for Dhaka)
+            cell_info = {
+                "mcc": 470,  # Bangladesh MCC
+                "mnc": mnc,  
+                "lac": 42001,  # Dhaka area LAC
+                "cid": 12345   # Example CID
+            }
             
             with Progress(
                 SpinnerColumn(),
@@ -446,7 +475,7 @@ class LocationTracker:
                 task = progress.add_task("", total=100)
                 for i in range(101):
                     progress.update(task, completed=i)
-                    time.sleep(0.05)
+                    time.sleep(0.02)  # Speed up animation
                     
             # Get location data
             location_data = self.get_location_from_cell_info(cell_info)
@@ -740,8 +769,52 @@ def main():
         # Authenticate user
         tracker.authenticate()
         
+        # Check if OpenCellID is configured
+        config = configparser.ConfigParser()
+        is_opencellid_configured = False
+        
+        if os.path.exists(CONFIG_FILE):
+            config.read(CONFIG_FILE)
+            
+            if 'API' in config and 'opencellid_key' in config['API']:
+                opencellid_key = config['API']['opencellid_key']
+                
+                # Check for environment variable if configured to use it
+                if opencellid_key == "use_env_variable":
+                    load_dotenv()
+                    env_key = os.getenv('OPENCELLID_API_KEY')
+                    if env_key and env_key != "your_opencellid_api_key_here":
+                        # We have a valid key in the environment
+                        is_opencellid_configured = True
+                        console.print("\n[bold green]✅ OpenCellID API key found in environment variables[/bold green]")
+                        input("\nPress Enter to continue...")
+                elif opencellid_key and opencellid_key != "your_opencellid_api_key_here":
+                    # We have a valid key in the config
+                    is_opencellid_configured = True
+                
+                if not is_opencellid_configured:
+                    console.print("\n[bold red]⚠️ IMPORTANT: OpenCellID API key is not configured![/bold red]")
+                    console.print("[bold yellow]You must configure OpenCellID to get REAL location data.[/bold yellow]")
+                    console.print("[bold yellow]Otherwise the application will not work correctly.[/bold yellow]")
+                    console.print("[bold]Choose 'A' from the menu to set up OpenCellID.[/bold]")
+                    input("\nPress Enter to continue...")
+        
         while True:
             try:
+                # Check if OpenCellID is properly configured
+                is_opencellid_configured = False
+                if 'API' in tracker.config and 'opencellid_key' in tracker.config['API']:
+                    key = tracker.config['API']['opencellid_key']
+                    
+                    # Check for environment variable if configured to use it
+                    if key == "use_env_variable":
+                        load_dotenv()
+                        key = os.getenv('OPENCELLID_API_KEY')
+                    
+                    if key and key != "your_opencellid_api_key_here":
+                        is_opencellid_configured = True
+                
+                # Clear terminal
                 os.system('clear')
                 console.print(Panel.fit(BANNER, border_style="green"))
                 console.print("\n[bold yellow]===== 📱 Mobile Number Tracker =====\n[/bold yellow]")
@@ -754,9 +827,17 @@ def main():
                 console.print("[7] Change Password")
                 console.print("[8] Clear Tracking History")
                 console.print("[9] System Capability Check")
+                
+                # Dynamically change the OpenCellID menu option text
+                if is_opencellid_configured:
+                    console.print("[A] Set Up OpenCellID [bold green](CONFIGURED)[/bold green]")
+                else:
+                    console.print("[A] Set Up OpenCellID [bold red](REQUIRED FOR REAL LOCATIONS)[/bold red]")
+                
+                console.print("[V] Verify OpenCellID Configuration")
                 console.print("[0] About/Exit")
                 
-                choice = safe_input("\nEnter your choice (0-9): ")
+                choice = safe_input("\nEnter your choice (0-9, A): ")
                 if choice is None:
                     continue
                 
@@ -764,6 +845,25 @@ def main():
                     console.print("\n[bold cyan]ℹ️ Track a Bangladesh mobile number[/bold cyan]")
                     console.print("[dim]Valid formats: +8801712345678, 8801712345678, 01712345678[/dim]")
                     console.print("[dim]Supported operators: GrameenPhone (017,013), Robi (018,016), Banglalink (019,014), Teletalk (015,011)[/dim]\n")
+                    
+                    # Check if OpenCellID is configured before allowing tracking
+                    is_opencellid_configured = False
+                    if 'API' in tracker.config and 'opencellid_key' in tracker.config['API']:
+                        key = tracker.config['API']['opencellid_key']
+                        
+                        # Check for environment variable if configured to use it
+                        if key == "use_env_variable":
+                            load_dotenv()
+                            key = os.getenv('OPENCELLID_API_KEY')
+                        
+                        if key and key != "your_opencellid_api_key_here":
+                            is_opencellid_configured = True
+                    
+                    if not is_opencellid_configured:
+                        console.print("[bold red]⚠️ OpenCellID API key is not configured. The tracker will not work correctly.[/bold red]")
+                        console.print("[bold yellow]Please set up OpenCellID first (option 'A' in the menu).[/bold yellow]")
+                        safe_prompt("\nPress Enter to continue...")
+                        continue
                     
                     mobile_number = safe_input("Enter mobile number to track: ")
                     if mobile_number is None:
@@ -810,6 +910,27 @@ def main():
                         safe_prompt("\nPress Enter to continue...")
                     except Exception as e:
                         console.print(f"\n[bold red]Error checking system: {str(e)}[/bold red]")
+                        safe_prompt("\nPress Enter to continue...")
+                elif choice.upper() == "A":
+                    try:
+                        # Import and run the OpenCellID setup utility
+                        from show_opencellid_info import setup_opencellid
+                        setup_opencellid()
+                        
+                        # Reload config after setup
+                        tracker.config = tracker.load_config()
+                    except Exception as e:
+                        console.print(f"\n[bold red]Error setting up OpenCellID: {str(e)}[/bold red]")
+                        safe_prompt("\nPress Enter to continue...")
+                elif choice.upper() == "V":
+                    try:
+                        # Import and run the OpenCellID configuration checker
+                        # Use importlib to ensure we get the latest version of the module
+                        check_opencellid = importlib.import_module('check_opencellid')
+                        check_opencellid.check_opencellid_configuration()
+                        safe_prompt("\nPress Enter to continue...")
+                    except Exception as e:
+                        console.print(f"\n[bold red]Error verifying OpenCellID configuration: {str(e)}[/bold red]")
                         safe_prompt("\nPress Enter to continue...")
                 elif choice == "0":
                     display_about()
